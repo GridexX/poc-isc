@@ -5,20 +5,28 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    expose:
+      - 24950
+    networks:
+      - isc
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
     ports:
       - "34567:3000"
-      - "24950:24950"
+    depends_on:
+      - server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health/alive"]
       interval: 30s
       timeout: 20s
       retries: 3
       start_period: 5s
-
-  client:
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-    depends_on:
-      - server
     command: ["/bin/sh", "-c", "sleep 10 && npm start"]
+    networks:
+      - isc
+
+networks:
+  isc:

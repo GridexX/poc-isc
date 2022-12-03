@@ -21,10 +21,11 @@ const service = avro.Service.forProtocol(protocol);
 
 const TCP_PORT = process.env.TCP_PORT || 24950;
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || 'localhost';
 
 const client = service.createClient({
   buffering: true,
-  transport: net.connect(TCP_PORT),
+  transport: net.connect({ host: host, port: TCP_PORT }),
 });
 
 
