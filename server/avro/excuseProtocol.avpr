@@ -1,0 +1,10 @@
+protocol ExcuseService {
+  record Excuse {
+    int id;
+    string category;
+    string excuse;
+  }
+  Excuse getByID(int id);
+  array<Excuse> getByCategory(string category, int numberOfExcuses);
+  array<Excuse> getRandom(int numberOfExcuses);
+}
