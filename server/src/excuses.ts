@@ -1,5 +1,3 @@
-import { ExcuseInterface } from './excuseInterface';
-
 module.exports = [
   // ---------- Family ----------
   {

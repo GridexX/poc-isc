@@ -3,7 +3,7 @@ require('dotenv').config()
 const STS_PORT = process.env.STS_PORT || 3001;
 const hostSTS = process.env.HOST_STS || 'localhost';
 
-async function getToken() {
+async function getToken(logger) {
   const { token, error } = await axios.get(`http://${hostSTS}:${STS_PORT}/token`)
     .catch(function (error) {
       if (error.response) {

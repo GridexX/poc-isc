@@ -17,7 +17,7 @@ function setupAvro() {
 
 function bindClientToService(service, client) {
   client = service.createClient({
-    buffering: true,
+    buffering: false,
     transport: client
   });
 

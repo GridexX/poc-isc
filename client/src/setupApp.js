@@ -1,10 +1,11 @@
+require("dotenv").config();
 const winston = require('winston');
 const expressWinston = require('express-winston');
 const { setupRoutes } = require('./routes');
 const hostAPI = process.env.HOST_API || 'localhost';
 const port = process.env.PORT || 3000;
 
-function setupApp(app, client) {
+function setupApp(app, client, logger) {
   app.all("*", function (req, res, next) {
     res.set("Access-Control-Allow-Origin", "*");
     res.setHeader("Content-Type", "application/json");
@@ -29,8 +30,8 @@ function setupApp(app, client) {
 
   setupRoutes(app, client);
 
-  app.listen({ host: hostAPI, port: port }, function () {
-    console.log(`Server running on http://${hostAPI}:${port}`);
+  return app.listen({ host: hostAPI, port: port }, function () {
+    logger.info(`Server running on http://${hostAPI}:${port}`);
   });
 
 }

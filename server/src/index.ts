@@ -1,12 +1,17 @@
+import { compileFunction } from "vm";
 import { ExcuseInterface } from "./excuseInterface";
+import { isClientVerified, isTokenValidForClient } from "./token";
+require("@avro/types");
+require('dotenv').config()
 
+
+const winston = require('winston');
 const net = require('net');
 const avro = require( 'avsc');
-require("@avro/types");
 const { promisifyAll } = require('../lib');
 const excuseRepository = require('./excuseRepository');
-
 const TCP_PORT = process.env.TCP_PORT || 24950;
+
 
 promisifyAll(avro.Service);
 
@@ -37,22 +42,54 @@ const server = service.createServer()
     return excuses;
   });
 
+  const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json(),
+    ),
+    transports: [
+      new winston.transports.Console()
+    ]
+  });
 
 
 // Set up the server to listen to incoming connections on port 24950.
+
 
 net.createServer({ keepAlive: true, keepAliveInitialDelay: 3600})
   .on('connection', function (con: any) { 
     con.setKeepAlive(true, 3600);
     con.on('end', () => {
-      console.log('client disconnected ' + con.remoteAddress);
+      logger.info('client disconnected ' + con.remoteAddress);
     });
     //On connection, we print the remote address and port of the client.
-    console.log('client connected ' + con.remoteAddress + ':' + con.remotePort);
-    con.on('data', (data: string) => {
-      console.log('data received '+data);
+    const client = con.remoteAddress + ':' + con.remotePort;
+    logger.info('client connected ' + client);
+    con.on('data', async(data: string) => {
+      logger.info('Received data from client' + client + ': ' + data);
+
+      let token = null;
+      try {
+        token = JSON.parse(data).token
+      } catch (_) {}
+
+      if(!isClientVerified(token, client) && token) {
+        logger.info('Token Received')
+        //Verify the token
+        logger.info('Send request to STS to verify token')
+        let {valid, error} = await isTokenValidForClient(token, client, logger)
+        con.write(JSON.stringify({valid, error}))
+        if(!valid) {
+          logger.error('Invalid Token');
+          con.end();
+        } else {
+          logger.info('Create channel for Avro')
+          server.createChannel(con); 
+        }
+      }
+
     });
-    server.createChannel(con); 
   })
-  .on('listening', function () { console.log('TCP server listening on port ' + TCP_PORT); })
+  .on('listening', function () { logger.info('TCP server listening on port ' + TCP_PORT); })
   .listen(TCP_PORT)

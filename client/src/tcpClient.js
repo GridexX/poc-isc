@@ -1,35 +1,47 @@
 const net = require('net');
+dotenv = require('dotenv');
 const TCP_PORT = process.env.TCP_PORT || 24950;
 const host = process.env.HOST || 'localhost';
-dotenv = require('dotenv');
 
 const functionAfterValidation = { apply: () => { } };
+const functionOnDisconnect = { apply: () => { } };
+let validateToken = false;
 
-function setupClient() {
+function setupClient(logger) {
   clientTCP = net.createConnection({ host: host, port: TCP_PORT });
-
+  let error = null;
   clientTCP.on('close', () => {
-    console.log('disconnected from server');
+    logger.info('disconnected from server');
+    functionOnDisconnect.apply();
     clientTCP.end();
   });
 
+
   clientTCP.on('data', (data) => {
-    try {
-      data = JSON.parse(data);
-      console.log("Received: " + JSON.stringify(data));
-      if (data?.tokenIsValid === true) {
-        console.log("Token is valid");
-        functionAfterValidation.apply();
-      } else {
-        console.log("Token is not valid");
-        clientTCP.end();
+    if (!validateToken) {
+
+      try {
+        data = JSON.parse(data);
+        logger.info("Received: " + JSON.stringify(data));
+
+        if (data?.valid === true) {
+          logger.info("Token is valid");
+          validateToken = true;
+          functionAfterValidation.apply();
+
+        } else {
+
+          logger.error("Token is not valid");
+          clientTCP.end();
+          return { error: "Token is not valid" };
+        }
+      } catch (err) {
+        logger.error(err);
       }
-    } catch (err) {
-      console.log(err);
     }
   });
 
-  return clientTCP;
+  return { clientTCP, error };
 }
 
 function sendToken(token, clientTCP) {
@@ -40,5 +52,6 @@ function sendToken(token, clientTCP) {
 module.exports = {
   setupClient,
   sendToken,
-  functionAfterValidation
+  functionAfterValidation,
+  functionOnDisconnect
 }

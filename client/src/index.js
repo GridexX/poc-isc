@@ -1,89 +1,57 @@
-const { start } = require('./start');
-
-start();
-
-
-
-// promisifyAll(avro.Service);
-
+const express = require("express");
+const { setupApp } = require("./setupApp");
+const { setupAvro, bindClientToService } = require("./avro");
+const { setupClient, sendToken, functionAfterValidation, functionOnDisconnect } = require("./tcpClient");
+const { getToken } = require("./sts");
+const winston = require('winston');
 
 
-// // We first compile the IDL specification into a JSON protocol.
-// const service = avro.Service.forProtocol(protocol);
-// let server = { close: () => { } };
-// const TCP_PORT = process.env.TCP_PORT || 24950;
-// const STS_PORT = process.env.STS_PORT || 3001;
-// const port = process.env.PORT || 3000;
-// const host = process.env.HOST || 'localhost';
-// const hostAPI = process.env.HOST_API || 'localhost';
-// const hostSTS = process.env.HOST_STS || 'localhost';
+async function start() {
+  const app = express();
+  const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json(),
+    ),
+    transports: [
+      new winston.transports.Console()
+    ]
+  });
 
 
+  let { clientTCP, errorClient } = setupClient(logger);
 
-// const clientTCP = net.createConnection({ host: host, port: TCP_PORT }, () => {
-//   console.log('connected to server!');
-// });
+  if (errorClient) {
+    logger.error(error);
+    clientTCP.end();
+    return;
+  }
 
-// clientTCP.on('data', (data) => {
-//   console.log('connection to server!' + data);
-// });
+  service = setupAvro();
 
-// const client = service.createClient({
-//   buffering: true,
-//   transport: clientTCP
-// });
+  const { token, error } = await getToken(logger)
 
-// // Call the STS to get the token
-// // Doesn't handle the error, to fail if the STS is not available
-// connectToSTSAndReturnToken = async () => {
-//   const response = await axios.get(`http://${hostSTS}:${STS_PORT}/token`)
-//   return response.data.token;
-// }
+  if (error) {
+    logger.error(error);
+    clientTCP.end();
+    return;
+  }
 
+  sendToken(token, clientTCP);
 
+  //Wait a bit before binding AVRO client to service
+  await new Promise(resolve => setTimeout(resolve, 500));
+  client = bindClientToService(service, clientTCP);
 
-// setupClient = async (service) => {
-//   clientTCP = await net.createConnection({ host: host, port: TCP_PORT }, async () => {
-//     const token = await connectToSTSAndReturnToken();
-//     console.log('connected to server!');
-//     if (token) {
-//       clientTCP.write(JSON.stringify({ token: token }));
-//     }
-//   })
+  functionAfterValidation.apply = () => {
+    const server = setupApp(app, client, logger);
+    functionOnDisconnect.apply = () => {
+      server.close();
+    }
+  }
+  functionAfterValidation.apply()
 
-//   clientTCP.on('close', () => {
-//     console.log('disconnected from server');
-//     server?.close();
-//   });
+}
 
-//   clientTCP.on("data", (data) => {
-//     try {
-//       data = JSON.parse(data);
-//       console.log("Received: " + JSON.stringify(data));
-//       if (data?.tokenIsValid === true) {
-//         console.log("Token is valid");
-//         server = app.listen({ host: hostAPI, port: port }, function () {
-//           console.log(`Server running on http://${host}:${port}`);
-//         });
-//       } else {
-//         console.log("Token is not valid");
-//         // clientTCP.end();
-//       }
-//     } catch (_) {
-//       ;
-//       // console.log("Error parsing data: " + e);
-//     }
-//   });
-
-//   let client = service.createClient({
-//     buffering: true,
-//     transport: clientTCP
-//   })
-
-//   return client;
-
-// }
-
-// let client = await setupClient(service);
-
-
+start() 

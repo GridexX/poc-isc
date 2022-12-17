@@ -1,6 +1,21 @@
 version: "3.9"
 
 services:
+
+  sts:
+    build:
+      context: ./sts
+      dockerfile: Dockerfile
+    expose:
+      - 3001
+    networks:
+      - isc
+    healthcheck:
+      test: "wget --no-verbose --tries=1 --spider http://localhost:3001/health/alive || exit 1"
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      
   server:
     build:
       context: ./server
@@ -17,14 +32,14 @@ services:
     ports:
       - "34567:3000"
     depends_on:
-      - server
+      sts:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health/alive"]
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/health/alive || exit 1
       interval: 30s
       timeout: 20s
       retries: 3
       start_period: 5s
-    command: ["/bin/sh", "-c", "sleep 10 && npm start"]
     networks:
       - isc
 

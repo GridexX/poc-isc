@@ -1,3 +1,5 @@
 client/node_modules
 server/node_modules
+sts/node_modules
 server/dist
+*.env
