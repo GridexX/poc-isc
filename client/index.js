@@ -4,7 +4,7 @@ const app = express();
 
 const winston = require('winston');
 const expressWinston = require('express-winston');
-
+require('dotenv').config()
 const avro = require('avsc');
 const { promisifyAll } = require('./lib');
 promisifyAll(avro.Service);
@@ -12,21 +12,67 @@ promisifyAll(avro.Service);
 // read the avro protocol and parse it
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const filePath = path.join("avro", 'excuseProtocol.avpr');
 const excuseProtocol = fs.readFileSync(filePath, 'utf8');
 const protocol = avro.readProtocol(excuseProtocol);
 
 // We first compile the IDL specification into a JSON protocol.
 const service = avro.Service.forProtocol(protocol);
-
+let server = { close: () => { } };
 const TCP_PORT = process.env.TCP_PORT || 24950;
+const STS_PORT = process.env.STS_PORT || 3001;
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || 'localhost';
+const hostAPI = process.env.HOST_API || 'localhost';
+const hostSTS = process.env.HOST_STS || 'localhost';
+
+// Call the STS to get the token
+// Doesn't handle the error, to fail if the STS is not available
+connectToSTSAndReturnToken = async () => {
+  const response = await axios.get(`http://${hostSTS}:${STS_PORT}/token`)
+  return response.data.token;
+}
+
+
+clientTCP = net.createConnection({ host: host, port: TCP_PORT }, async () => {
+  const token = await connectToSTSAndReturnToken();
+  console.log('connected to server!');
+  if (token) {
+    clientTCP.write(JSON.stringify({ token: token }));
+  }
+})
+
+
+clientTCP.on('close', () => {
+  console.log('disconnected from server');
+  server?.close();
+});
+
+clientTCP.on("data", (data) => {
+  try {
+    data = JSON.parse(data);
+    console.log("Received: " + JSON.stringify(data));
+    if (data?.tokenIsValid === true) {
+      console.log("Token is valid");
+      server = app.listen({ host: hostAPI, port: port }, function () {
+        console.log(`Server running on http://${host}:${port}`);
+      });
+    } else {
+      console.log("Token is not valid");
+      // clientTCP.end();
+    }
+  } catch (_) {
+    ;
+    // console.log("Error parsing data: " + e);
+  }
+});
 
 const client = service.createClient({
   buffering: true,
-  transport: net.connect({ host: host, port: TCP_PORT }),
+  transport: clientTCP,
 });
+
 
 
 app.all("*", function (req, res, next) {
@@ -103,6 +149,3 @@ app.get("*", function (_, res) {
   res.status(404).send(" 404 - Page not found ");
 });
 
-app.listen(port, function () {
-  console.log(`Server running on http://localhost:${port}`);
-});
